@@ -3,16 +3,43 @@
 -- Nowe: rollup ekspozycji seniorskiej (kadra vs realne minuty).
 
 WITH params AS (
-    SELECT
-        'e9d66181-d03e-4bb3-b889-4da848f4831d'::text AS season_id,   -- <<< :SEASON_ID
-        '531b2ba4-d770-484f-b74f-027fd53a3919'::text AS play_id      -- <<< :PLAY_ID  (2 liga wojewodzka A1)
+    SELECT 'e9d66181-d03e-4bb3-b889-4da848f4831d'::text AS season_id   -- <<< :SEASON_ID
+),
+
+-- ===== WYBÓR ZAKRESU RAPORTU — ustaw JEDNĄ opcję; sel_plays zwraca listę play_id =====
+sel_plays AS (
+    -- OPCJA A: konkretne rozgrywki (jedna lub kilka) — wpisz play_id:
+    SELECT unnest(ARRAY[
+        '531b2ba4-d770-484f-b74f-027fd53a3919'        -- np. 2 liga woj. A1
+        -- ,'kolejne-play-id'
+        -- ,'kolejne-play-id'
+    ]::text[]) AS play_id
+
+    -- OPCJA B: cała liga (wszystkie grupy/regiony poziomu) — zakomentuj A, odkomentuj B:
+    -- SELECT DISTINCT ps.play_id
+    -- FROM pm_player_stats ps
+    -- JOIN leagues l ON ps.league_id = l._id
+    -- CROSS JOIN params prm
+    -- WHERE ps.season_id = prm.season_id
+    --   AND l.name = 'Czwarta liga'                  -- <<< nazwa poziomu rozgrywek
+
+    -- OPCJA C: poziom + wybrane województwa (np. C1 z 4 regionów — pod listy social):
+    -- SELECT DISTINCT ps.play_id
+    -- FROM pm_player_stats ps
+    -- JOIN leagues l ON ps.league_id = l._id
+    -- JOIN plays pl ON ps.play_id = pl._id
+    -- JOIN regions rg ON pl.region_id = rg._id
+    -- CROSS JOIN params prm
+    -- WHERE ps.season_id = prm.season_id
+    --   AND l.name = 'C1'
+    --   AND rg.name IN ('Podkarpackie','Świętokrzyskie','Mazowieckie','Dolnośląskie')
 ),
 
 roster AS (
     SELECT DISTINCT ps.player_id
     FROM pm_player_stats ps CROSS JOIN params prm
     WHERE ps.season_id = prm.season_id
-      AND ps.play_id   = prm.play_id
+      AND ps.play_id IN (SELECT play_id FROM sel_plays)
 ),
 
 play_ref AS (
@@ -87,7 +114,7 @@ FROM (
         l.name AS league_name,
         c.name AS club_name,
 
-        (ps.play_id = prm.play_id)                            AS in_selected_play,
+        (ps.play_id IN (SELECT play_id FROM sel_plays))      AS in_selected_play,
 
         CASE
             WHEN l.name ~* '^(A1|A2|B1|B2|C1|C2|D1|D2)$'
